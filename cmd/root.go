@@ -1,5 +1,4 @@
-The MIT License (MIT)
-
+/*
 Copyright © 2025 0siriz <0siriz@proton.me>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,3 +18,36 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+*/
+package cmd
+
+import (
+	"os"
+
+	"github.com/spf13/cobra"
+)
+
+
+
+var rootCmd = &cobra.Command{
+	Use:   "keyweaver",
+	Short: "A toolkit for setting up and working with a Public Key Infrastructure",
+	Long: `KeyWeaver is a set of tools to setup a Public Key Infrastructure.
+It aims to be able to generate anything from a single to a 3-tiered CA.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) == 0 {
+			cmd.Help()
+			os.Exit(0)
+		}
+	},
+}
+
+func Execute() {
+	err := rootCmd.Execute()
+	if err != nil {
+		os.Exit(1)
+	}
+}
+
+func init() {
+}
