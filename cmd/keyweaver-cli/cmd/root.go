@@ -11,7 +11,6 @@ import (
 var rootCmd = &cobra.Command{
 	Use: "keyweaver-cli",
 	Short: "A toolkit for setting up and working with a Public Key Infrastructure",
-	Long: `CLI tool for setting up and managing a KeyWeaver Public Key Infrastruture`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			cmd.Help()
