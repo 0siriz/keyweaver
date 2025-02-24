@@ -18,5 +18,5 @@ var CaCmd = &cobra.Command{
 }
 
 func init() {
-
+	CaCmd.AddCommand(initCmd)
 }
