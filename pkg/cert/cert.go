@@ -1,12 +1,111 @@
 package cert
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"fmt"
 	"math/big"
 	"time"
+
+	"github.com/0siriz/keyweaver/pkg/models"
 )
+
+func CreateCAs(config models.CAConfig) (err error) {
+	for _, rootCA := range config.CAs {
+		rootPrivateKey, rootPublicKey, err := generateKey(rootCA.KeyType, rootCA.KeySize)
+		if err != nil {
+			return err
+		}
+
+		rootCertificate, err := CreateRootCert(
+			rootCA.CommonName,
+			rootCA.Organization,
+			rootCA.Country,
+			rootCA.ValidityDays,
+			rootPrivateKey,
+			rootPublicKey)
+		if err != nil {
+			return err
+		}
+
+		parsedCert, err := x509.ParseCertificate(rootCertificate)
+		if err != nil {
+			return err
+		}
+
+		// TODO: save the cert and key to disk
+		fmt.Println(parsedCert.Subject)
+
+		err = createIssuedCAs(rootCA.IssuedCAs, rootPrivateKey, parsedCert)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createIssuedCAs(issuedCAs map[string]models.CADetails, parentPrivateKey any, parentCertificate *x509.Certificate) (err error) {
+	for _, issuedCA := range issuedCAs {
+		issuedPrivateKey, issuedPublicKey, err := generateKey(issuedCA.KeyType, issuedCA.KeySize)
+		if err != nil {
+			return err
+		}
+
+		issuedCertificate, err := CreateCACert(
+			issuedCA.CommonName,
+			issuedCA.Organization,
+			issuedCA.Country,
+			issuedCA.ValidityDays,
+			issuedPrivateKey,
+			issuedPublicKey,
+			parentPrivateKey,
+			parentCertificate)
+		if err != nil {
+			return err
+		}
+		
+		parsedCert, err := x509.ParseCertificate(issuedCertificate)
+		if err != nil {
+			return err
+		}
+		
+		// TODO: save the cert and key to disk
+		fmt.Println(parsedCert.Subject)
+
+		err = createIssuedCAs(issuedCA.IssuedCAs, issuedPrivateKey, parsedCert)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func generateKey(keyType string, keySize int) (any, any, error) {
+	switch keyType {
+	case "rsa", "":
+		if keySize == 0 {
+			keySize = 4096
+		}
+		privateKey, err := rsa.GenerateKey(rand.Reader, keySize)
+		if err != nil {
+			return nil, nil, err
+		}
+		return privateKey, &privateKey.PublicKey, nil
+	case "ed25519":
+		privateKey, publicKey, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return nil, nil, err
+		}
+		return privateKey, publicKey, nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported key type: %s", keyType)
+	}
+}
 
 func generateSerialNumber() (serialNumber *big.Int, err error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128) 
@@ -24,8 +123,7 @@ func CreateRootCert(
 	country string,
 	validDays int,
 	privateKey,
-	publicKey any,
-) (cert []byte, err error) {
+	publicKey any) (cert []byte, err error) {
 	cert, err = CreateCACert(
 		commonName,
 		organization,
@@ -34,8 +132,7 @@ func CreateRootCert(
 		privateKey,
 		publicKey,
 		nil,
-		nil,
-	)
+		nil)
 
 	return cert, err
 }
@@ -48,8 +145,7 @@ func CreateCACert(
 	privateKey,
 	publicKey,
 	parentPrivateKey any,
-	parentCertificate *x509.Certificate,
-) (cert []byte, err error) {
+	parentCertificate *x509.Certificate) (cert []byte, err error) {
 	serialNumber, err := generateSerialNumber()
 	if err != nil {
 		return nil, err
