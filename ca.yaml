@@ -1,0 +1,39 @@
+output_dir: "./ca_out"
+
+cas:
+  root:
+    common_name: "My Root CA"
+    organization: "My Company Inc"
+    country: "US"
+    validity_days: 3650
+    key_size: 4096
+    issued_cas:
+      intermediate_1:
+        common_name: "My Intermediate CA 1"
+        organization: "My Company Inc"
+        country: "US"
+        validity_days: 1825
+        key_size: 4096
+        issued_cas:
+          issuing_1:
+            common_name: "My Issuing CA 1"
+            organization: "My Company Inc"
+            country: "US"
+            validity_days: 1095
+            key_type: "rsa"
+            key_size: 4096
+      
+      intermediate_2:
+        common_name: "My Intermediate CA 2"
+        organization: "My Company Inc"
+        country: "US"
+        validity_days: 1825
+        key_size: 4096
+        issued_cas:
+          issuing_2:
+            common_name: "My Issuing CA 2"
+            organization: "My Company Inc"
+            country: "US"
+            validity_days: 1095
+            key_type: "rsa"
+            key_size: 4096
