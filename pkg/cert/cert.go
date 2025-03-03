@@ -7,13 +7,15 @@ import (
 	"crypto/x509/pkix"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"time"
 
 	"github.com/0siriz/keyweaver/pkg/models"
+	"github.com/0siriz/keyweaver/pkg/storage"
 )
 
 func CreateCAs(config models.CAConfig) (err error) {
-	for _, rootCA := range config.CAs {
+	for rootCAName, rootCA := range config.CAs {
 		rootPrivateKey, rootPublicKey, err := generateKey(rootCA.KeySize)
 		if err != nil {
 			return err
@@ -30,15 +32,45 @@ func CreateCAs(config models.CAConfig) (err error) {
 			return err
 		}
 
+		privateKeyFile := storage.File{
+			FileName: "key.pem",
+			Directory: filepath.Join(config.OutputDir, rootCAName),
+			FileType: storage.FileTypePrivateKey,
+			Data: x509.MarshalPKCS1PrivateKey(rootPrivateKey),
+
+		}
+		publicKeyFile := storage.File{
+			FileName: "key.pub",
+			Directory: filepath.Join(config.OutputDir, rootCAName),
+			FileType: storage.FileTypePublicKey,
+			Data: x509.MarshalPKCS1PublicKey(rootPublicKey),
+		}
+		certFile := storage.File{
+			FileName: "certificate.crt",
+			Directory: filepath.Join(config.OutputDir, rootCAName),
+			FileType: storage.FileTypeCertificate,
+			Data: rootCertificate,
+		}
+
+		err = storage.SaveFile(privateKeyFile)
+		if err != nil {
+			return err
+		}
+		err = storage.SaveFile(publicKeyFile)
+		if err != nil {
+			return err
+		}
+		err = storage.SaveFile(certFile)
+		if err != nil {
+			return err
+		}
+
 		parsedCert, err := x509.ParseCertificate(rootCertificate)
 		if err != nil {
 			return err
 		}
 
-		// TODO: save the cert and key to disk
-		fmt.Println(parsedCert.Subject)
-
-		err = createIssuedCAs(rootCA.IssuedCAs, rootPrivateKey, parsedCert)
+		err = createIssuedCAs(rootCA.IssuedCAs, config.OutputDir, rootPrivateKey, parsedCert)
 		if err != nil {
 			return err
 		}
@@ -47,8 +79,8 @@ func CreateCAs(config models.CAConfig) (err error) {
 	return nil
 }
 
-func createIssuedCAs(issuedCAs map[string]models.CADetails, parentPrivateKey any, parentCertificate *x509.Certificate) (err error) {
-	for _, issuedCA := range issuedCAs {
+func createIssuedCAs(issuedCAs map[string]models.CADetails, directory string, parentPrivateKey any, parentCertificate *x509.Certificate) (err error) {
+	for issuedCAName, issuedCA := range issuedCAs {
 		issuedPrivateKey, issuedPublicKey, err := generateKey(issuedCA.KeySize)
 		if err != nil {
 			return err
@@ -67,15 +99,45 @@ func createIssuedCAs(issuedCAs map[string]models.CADetails, parentPrivateKey any
 			return err
 		}
 		
+		privateKeyFile := storage.File{
+			FileName: "key.pem",
+			Directory: filepath.Join(directory, issuedCAName),
+			FileType: storage.FileTypePrivateKey,
+			Data: x509.MarshalPKCS1PrivateKey(issuedPrivateKey),
+
+		}
+		publicKeyFile := storage.File{
+			FileName: "key.pub",
+			Directory: filepath.Join(directory, issuedCAName),
+			FileType: storage.FileTypePublicKey,
+			Data: x509.MarshalPKCS1PublicKey(issuedPublicKey),
+		}
+		certFile := storage.File{
+			FileName: "certificate.crt",
+			Directory: filepath.Join(directory, issuedCAName),
+			FileType: storage.FileTypeCertificate,
+			Data: issuedCertificate,
+		}
+
+		err = storage.SaveFile(privateKeyFile)
+		if err != nil {
+			return err
+		}
+		err = storage.SaveFile(publicKeyFile)
+		if err != nil {
+			return err
+		}
+		err = storage.SaveFile(certFile)
+		if err != nil {
+			return err
+		}
+
 		parsedCert, err := x509.ParseCertificate(issuedCertificate)
 		if err != nil {
 			return err
 		}
 		
-		// TODO: save the cert and key to disk
-		fmt.Println(parsedCert.Subject)
-
-		err = createIssuedCAs(issuedCA.IssuedCAs, issuedPrivateKey, parsedCert)
+		err = createIssuedCAs(issuedCA.IssuedCAs, directory, issuedPrivateKey, parsedCert)
 		if err != nil {
 			return err
 		}
