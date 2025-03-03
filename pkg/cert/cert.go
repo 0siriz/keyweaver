@@ -1,7 +1,6 @@
 package cert
 
 import (
-	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -15,7 +14,7 @@ import (
 
 func CreateCAs(config models.CAConfig) (err error) {
 	for _, rootCA := range config.CAs {
-		rootPrivateKey, rootPublicKey, err := generateKey(rootCA.KeyType, rootCA.KeySize)
+		rootPrivateKey, rootPublicKey, err := generateKey(rootCA.KeySize)
 		if err != nil {
 			return err
 		}
@@ -50,7 +49,7 @@ func CreateCAs(config models.CAConfig) (err error) {
 
 func createIssuedCAs(issuedCAs map[string]models.CADetails, parentPrivateKey any, parentCertificate *x509.Certificate) (err error) {
 	for _, issuedCA := range issuedCAs {
-		issuedPrivateKey, issuedPublicKey, err := generateKey(issuedCA.KeyType, issuedCA.KeySize)
+		issuedPrivateKey, issuedPublicKey, err := generateKey(issuedCA.KeySize)
 		if err != nil {
 			return err
 		}
@@ -85,26 +84,15 @@ func createIssuedCAs(issuedCAs map[string]models.CADetails, parentPrivateKey any
 	return nil
 }
 
-func generateKey(keyType string, keySize int) (any, any, error) {
-	switch keyType {
-	case "rsa", "":
-		if keySize == 0 {
-			keySize = 4096
-		}
-		privateKey, err := rsa.GenerateKey(rand.Reader, keySize)
-		if err != nil {
-			return nil, nil, err
-		}
-		return privateKey, &privateKey.PublicKey, nil
-	case "ed25519":
-		privateKey, publicKey, err := ed25519.GenerateKey(rand.Reader)
-		if err != nil {
-			return nil, nil, err
-		}
-		return privateKey, publicKey, nil
-	default:
-		return nil, nil, fmt.Errorf("unsupported key type: %s", keyType)
+func generateKey(keySize int) (*rsa.PrivateKey, *rsa.PublicKey, error) {
+	if keySize == 0 {
+		keySize = 4096
 	}
+	privateKey, err := rsa.GenerateKey(rand.Reader, keySize)
+	if err != nil {
+		return nil, nil, err
+	}
+	return privateKey, &privateKey.PublicKey, nil
 }
 
 func generateSerialNumber() (serialNumber *big.Int, err error) {

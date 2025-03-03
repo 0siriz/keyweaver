@@ -6,7 +6,6 @@ cas:
     organization: "My Company Inc"
     country: "US"
     validity_days: 3650
-    key_type: "rsa"
     key_size: 4096
     issued_cas:
       intermediate_1:
@@ -14,7 +13,6 @@ cas:
         organization: "My Company Inc"
         country: "US"
         validity_days: 1825
-        key_type: "rsa"
         key_size: 4096
         issued_cas:
           issuing_1:
@@ -30,7 +28,6 @@ cas:
         organization: "My Company Inc"
         country: "US"
         validity_days: 1825
-        key_type: "rsa"
         key_size: 4096
         issued_cas:
           issuing_2:
