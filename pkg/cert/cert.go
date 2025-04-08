@@ -5,7 +5,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"fmt"
 	"math/big"
 	"path/filepath"
 	"time"
