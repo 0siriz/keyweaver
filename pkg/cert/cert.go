@@ -1,8 +1,8 @@
 package cert
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"math/big"
@@ -13,63 +13,40 @@ import (
 	"github.com/0siriz/keyweaver/pkg/storage"
 )
 
-func CreateCAs(config models.CAConfig) (err error) {
-	for rootCAName, rootCA := range config.CAs {
-		rootPrivateKey, rootPublicKey, err := generateKey(rootCA.KeySize)
+func CreateCAs(config models.CAConfig) error {
+	for name, ca := range config.CAs {
+		publicKey, privateKey, err := generateKeypair()
+		if err != nil {
+			return err
+		}
+		
+		err = saveKeypair(publicKey, privateKey, filepath.Join(config.OutputDirectory, name))
 		if err != nil {
 			return err
 		}
 
-		rootCertificate, err := CreateRootCert(
-			rootCA.CommonName,
-			rootCA.Organization,
-			rootCA.Country,
-			rootCA.ValidityDays,
-			rootPrivateKey,
-			rootPublicKey)
+		certificateBytes, err := CreateRootCert(
+			ca.CommonName,
+			ca.Organization,
+			ca.Country,
+			ca.ValidityDays,
+			privateKey,
+			publicKey)
 		if err != nil {
 			return err
 		}
 
-		privateKeyFile := storage.File{
-			FileName: "key.pem",
-			Directory: filepath.Join(config.OutputDir, rootCAName),
-			FileType: storage.FileTypePrivateKey,
-			Data: x509.MarshalPKCS1PrivateKey(rootPrivateKey),
-
-		}
-		publicKeyFile := storage.File{
-			FileName: "key.pub",
-			Directory: filepath.Join(config.OutputDir, rootCAName),
-			FileType: storage.FileTypePublicKey,
-			Data: x509.MarshalPKCS1PublicKey(rootPublicKey),
-		}
-		certFile := storage.File{
-			FileName: "certificate.crt",
-			Directory: filepath.Join(config.OutputDir, rootCAName),
-			FileType: storage.FileTypeCertificate,
-			Data: rootCertificate,
-		}
-
-		err = storage.SaveFile(privateKeyFile)
-		if err != nil {
-			return err
-		}
-		err = storage.SaveFile(publicKeyFile)
-		if err != nil {
-			return err
-		}
-		err = storage.SaveFile(certFile)
+		err = saveCertificate(certificateBytes, filepath.Join(config.OutputDirectory, name))
 		if err != nil {
 			return err
 		}
 
-		parsedCert, err := x509.ParseCertificate(rootCertificate)
+		certificate, err := x509.ParseCertificate(certificateBytes)
 		if err != nil {
 			return err
 		}
 
-		err = createIssuedCAs(rootCA.IssuedCAs, config.OutputDir, rootPrivateKey, parsedCert)
+		err = createIssuedCAs(ca.IssuedCAs, config.OutputDirectory, privateKey, certificate)
 		if err != nil {
 			return err
 		}
@@ -78,65 +55,43 @@ func CreateCAs(config models.CAConfig) (err error) {
 	return nil
 }
 
-func createIssuedCAs(issuedCAs map[string]models.CADetails, directory string, parentPrivateKey any, parentCertificate *x509.Certificate) (err error) {
-	for issuedCAName, issuedCA := range issuedCAs {
-		issuedPrivateKey, issuedPublicKey, err := generateKey(issuedCA.KeySize)
+func createIssuedCAs(issuedCAs map[string]models.CADetails, outputDirectory string, parentPrivateKey ed25519.PrivateKey, parentCertificate *x509.Certificate) error {
+	for name, ca := range issuedCAs {
+		publicKey, privateKey, err := generateKeypair()
 		if err != nil {
 			return err
 		}
 
-		issuedCertificate, err := CreateCACert(
-			issuedCA.CommonName,
-			issuedCA.Organization,
-			issuedCA.Country,
-			issuedCA.ValidityDays,
-			issuedPrivateKey,
-			issuedPublicKey,
+		err = saveKeypair(publicKey, privateKey, filepath.Join(outputDirectory, name))
+		if err != nil {
+			return err
+		}
+
+		certificateBytes, err := CreateCACert(
+			ca.CommonName,
+			ca.Organization,
+			ca.Country,
+			ca.ValidityDays,
+			privateKey,
+			publicKey,
 			parentPrivateKey,
 			parentCertificate)
 		if err != nil {
 			return err
 		}
-		
-		privateKeyFile := storage.File{
-			FileName: "key.pem",
-			Directory: filepath.Join(directory, issuedCAName),
-			FileType: storage.FileTypePrivateKey,
-			Data: x509.MarshalPKCS1PrivateKey(issuedPrivateKey),
 
-		}
-		publicKeyFile := storage.File{
-			FileName: "key.pub",
-			Directory: filepath.Join(directory, issuedCAName),
-			FileType: storage.FileTypePublicKey,
-			Data: x509.MarshalPKCS1PublicKey(issuedPublicKey),
-		}
-		certFile := storage.File{
-			FileName: "certificate.crt",
-			Directory: filepath.Join(directory, issuedCAName),
-			FileType: storage.FileTypeCertificate,
-			Data: issuedCertificate,
-		}
 
-		err = storage.SaveFile(privateKeyFile)
-		if err != nil {
-			return err
-		}
-		err = storage.SaveFile(publicKeyFile)
-		if err != nil {
-			return err
-		}
-		err = storage.SaveFile(certFile)
+		err = saveCertificate(certificateBytes, filepath.Join(outputDirectory, name))
 		if err != nil {
 			return err
 		}
 
-		parsedCert, err := x509.ParseCertificate(issuedCertificate)
+		certificate, err := x509.ParseCertificate(certificateBytes)
 		if err != nil {
 			return err
 		}
-		
-		err = createIssuedCAs(issuedCA.IssuedCAs, directory, issuedPrivateKey, parsedCert)
+
+		err = createIssuedCAs(ca.IssuedCAs, outputDirectory, privateKey, certificate)
 		if err != nil {
 			return err
 		}
@@ -145,20 +100,17 @@ func createIssuedCAs(issuedCAs map[string]models.CADetails, directory string, pa
 	return nil
 }
 
-func generateKey(keySize int) (*rsa.PrivateKey, *rsa.PublicKey, error) {
-	if keySize == 0 {
-		keySize = 4096
-	}
-	privateKey, err := rsa.GenerateKey(rand.Reader, keySize)
+func generateKeypair() (ed25519.PublicKey, ed25519.PrivateKey, error) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, nil, err
 	}
-	return privateKey, &privateKey.PublicKey, nil
+	return publicKey, privateKey, nil
 }
 
-func generateSerialNumber() (serialNumber *big.Int, err error) {
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128) 
-	serialNumber, err = rand.Int(rand.Reader, serialNumberLimit)
+func generateSerialNumber() (*big.Int, error) {
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return serialNumber, err
 	}
@@ -166,14 +118,67 @@ func generateSerialNumber() (serialNumber *big.Int, err error) {
 	return serialNumber, nil
 }
 
+func saveKeypair(publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey, outputDirectory string) error {
+	marshalledPublicKey, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return err
+	}
+
+	marshalledPrivateKey, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return err
+	}
+
+	publicKeyFile := storage.File{
+		FileName:  "key.pub",
+		Directory: outputDirectory,
+		FileType:  storage.FileTypePublicKey,
+		Data:      marshalledPublicKey,
+	}
+	privateKeyFile := storage.File{
+		FileName:  "key.pem",
+		Directory: outputDirectory,
+		FileType:  storage.FileTypePrivateKey,
+		Data:      marshalledPrivateKey,
+	}
+
+	err = storage.SaveFile(privateKeyFile)
+	if err != nil {
+		return err
+	}
+	err = storage.SaveFile(publicKeyFile)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func saveCertificate(certificateBytes []byte, outputDirectory string) error {
+	certificateFile := storage.File{
+		FileName:  "certificate.crt",
+		Directory: outputDirectory,
+		FileType:  storage.FileTypeCertificate,
+		Data:      certificateBytes,
+	}
+
+
+	err := storage.SaveFile(certificateFile)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func CreateRootCert(
 	commonName,
 	organization,
 	country string,
 	validDays int,
-	privateKey,
-	publicKey any) (cert []byte, err error) {
-	cert, err = CreateCACert(
+	privateKey ed25519.PrivateKey,
+	publicKey ed25519.PublicKey) ([]byte, error) {
+	certificateBytes, err := CreateCACert(
 		commonName,
 		organization,
 		country,
@@ -183,7 +188,7 @@ func CreateRootCert(
 		nil,
 		nil)
 
-	return cert, err
+	return certificateBytes, err
 }
 
 func CreateCACert(
@@ -191,27 +196,27 @@ func CreateCACert(
 	organization,
 	country string,
 	validDays int,
-	privateKey,
-	publicKey,
-	parentPrivateKey any,
-	parentCertificate *x509.Certificate) (cert []byte, err error) {
+	privateKey ed25519.PrivateKey,
+	publicKey ed25519.PublicKey,
+	parentPrivateKey ed25519.PrivateKey,
+	parentCertificate *x509.Certificate) ([]byte, error) {
 	serialNumber, err := generateSerialNumber()
 	if err != nil {
 		return nil, err
 	}
 
-	caCert := &x509.Certificate{
+	certificate := &x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			CommonName: commonName,
+			CommonName:   commonName,
 			Organization: []string{organization},
-			Country: []string{country},
+			Country:      []string{country},
 		},
-		NotBefore: time.Now(),
-		NotAfter: time.Now().AddDate(0, 0, validDays),
-		IsCA: true,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().AddDate(0, 0, validDays),
+		IsCA:                  true,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
 	}
 
@@ -219,14 +224,14 @@ func CreateCACert(
 	if parentPrivateKey != nil {
 		signingPrivateKey = parentPrivateKey
 	}
-	signingCertificate := caCert
+	signingCertificate := certificate
 	if parentCertificate != nil {
 		signingCertificate = parentCertificate
 	}
-	cert, err = x509.CreateCertificate(rand.Reader, caCert, signingCertificate, publicKey, signingPrivateKey)
+	certificateBytes, err := x509.CreateCertificate(rand.Reader, certificate, signingCertificate, publicKey, signingPrivateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return cert, nil
+	return certificateBytes, nil
 }

@@ -41,12 +41,12 @@ func SaveFile(f File) error {
 	switch f.FileType {
 	case FileTypePublicKey:
 		pemBlock = &pem.Block{
-			Type: "RSA PUBLIC KEY",
+			Type: "PUBLIC KEY",
 			Bytes: f.Data,
 		}
 	case FileTypePrivateKey:
 		pemBlock = &pem.Block{
-			Type: "RSA PRIVATE KEY",
+			Type: "PRIVATE KEY",
 			Bytes: f.Data,
 		}
 	case FileTypeCertificate:
