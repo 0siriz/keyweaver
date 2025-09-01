@@ -9,15 +9,24 @@ import (
 type FileType int
 
 const (
-	FileTypePrivateKey FileType = 1 << iota
+	FileTypePrivateKey FileType = iota
+	FileTypeEncryptedPrivateKey
 	FileTypePublicKey
 	FileTypeCertificate
 )
+
+var fileTypeName = map[FileType]string{
+	FileTypePrivateKey:          "PRIVATE KEY",
+	FileTypeEncryptedPrivateKey: "ENCRYPTED PRIVATE KEY",
+	FileTypePublicKey:           "PUBLIC KEY",
+	FileTypeCertificate:         "CERTIFICATE",
+}
 
 type File struct {
 	FileName string
 	Directory string
 	FileType FileType
+	FileMode os.FileMode
 	Data []byte
 }
 
@@ -30,33 +39,13 @@ func SaveFile(f File) error {
 		}
 	}
 
-	pemfile, err := os.Create(filepath.Join(f.Directory, f.FileName))
-	if err != nil {
-		return err
-	}
-	defer pemfile.Close()
-
-	var pemBlock *pem.Block = nil
-
-	switch f.FileType {
-	case FileTypePublicKey:
-		pemBlock = &pem.Block{
-			Type: "PUBLIC KEY",
-			Bytes: f.Data,
-		}
-	case FileTypePrivateKey:
-		pemBlock = &pem.Block{
-			Type: "PRIVATE KEY",
-			Bytes: f.Data,
-		}
-	case FileTypeCertificate:
-		pemBlock = &pem.Block{
-			Type: "CERTIFICATE",
-			Bytes: f.Data,
-		}
+	var pemBlock *pem.Block = &pem.Block{
+		Type: fileTypeName[f.FileType],
+		Bytes: f.Data,
 	}
 
-	err = pem.Encode(pemfile, pemBlock)
+	pemBytes := pem.EncodeToMemory(pemBlock)
+	err := os.WriteFile(filepath.Join(f.Directory, f.FileName), pemBytes, f.FileMode)
 	if err != nil {
 		return err
 	}

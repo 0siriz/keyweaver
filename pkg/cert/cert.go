@@ -130,15 +130,17 @@ func saveKeypair(publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey, out
 	}
 
 	publicKeyFile := storage.File{
-		FileName:  "key.pub",
+		FileName:  "public.pem",
 		Directory: outputDirectory,
 		FileType:  storage.FileTypePublicKey,
+		FileMode:  0644,
 		Data:      marshalledPublicKey,
 	}
 	privateKeyFile := storage.File{
-		FileName:  "key.pem",
+		FileName:  "private.pem",
 		Directory: outputDirectory,
 		FileType:  storage.FileTypePrivateKey,
+		FileMode:  0600,
 		Data:      marshalledPrivateKey,
 	}
 
@@ -159,6 +161,7 @@ func saveCertificate(certificateBytes []byte, outputDirectory string) error {
 		FileName:  "certificate.crt",
 		Directory: outputDirectory,
 		FileType:  storage.FileTypeCertificate,
+		FileMode:  0644,
 		Data:      certificateBytes,
 	}
 
